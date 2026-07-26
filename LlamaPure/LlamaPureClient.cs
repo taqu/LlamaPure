@@ -20,7 +20,8 @@ namespace LlamaPure
 
             LlamaPureNative.llama_backend_init();
 
-            var modelParams = LlamaPureNative.llama_model_default_params();
+            LlamaPureNative.LlamaModelParams modelParams = LlamaPureNative.llama_model_default_params();
+            modelParams.load_mode = LlamaPureNative.LlamaLoadMode.None;
             _model = LlamaPureNative.llama_model_load_from_file(modelPath, modelParams);
             if (_model == IntPtr.Zero)
                 throw new InvalidOperationException($"Failed to load model from '{modelPath}'.");
