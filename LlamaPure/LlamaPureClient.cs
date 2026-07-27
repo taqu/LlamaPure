@@ -49,6 +49,9 @@ namespace LlamaPure
             ThrowIfDisposed();
             if (text == null) throw new ArgumentNullException(nameof(text));
 
+            IntPtr mem = LlamaPureNative.llama_get_memory(_ctx);
+            LlamaPureNative.llama_memory_clear(mem, 0);
+
             int[] tokenIds = Tokenize(text, addSpecial: true);
             if (tokenIds.Length == 0)
                 throw new InvalidOperationException("Tokenization produced no tokens.");
@@ -82,6 +85,9 @@ namespace LlamaPure
             ThrowIfDisposed();
             if (prompt == null) throw new ArgumentNullException(nameof(prompt));
             if (maxNewTokens <= 0) throw new ArgumentOutOfRangeException(nameof(maxNewTokens));
+
+            IntPtr mem = LlamaPureNative.llama_get_memory(_ctx);
+            LlamaPureNative.llama_memory_clear(mem, 0);
 
             int[] promptTokens = Tokenize(prompt, addSpecial: true);
             if (promptTokens.Length == 0)

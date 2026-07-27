@@ -309,4 +309,20 @@ internal static class LlamaPureNative
 
     [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
     public static extern IntPtr llama_get_embeddings_ith(IntPtr ctx, int i);
+
+    // -------------------------------------------------------------------------
+    // Memory / KV cache
+    // -------------------------------------------------------------------------
+    [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern IntPtr llama_get_memory(IntPtr ctx);
+
+    [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern void llama_memory_clear(IntPtr mem, byte data);
+
+    // Removes tokens in position range [p0, p1) for the given sequence.
+    // Pass p1 = -1 to remove from p0 to the end.
+    // Returns false if the operation is not supported by this memory type.
+    [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern bool llama_memory_seq_rm(IntPtr mem, int seq_id, int p0, int p1);
+
 }
