@@ -57,7 +57,5 @@ TestResult.xml
 nunit-*.xml
 
 /.vs
-build/
-install/
 obj/
 bin/
