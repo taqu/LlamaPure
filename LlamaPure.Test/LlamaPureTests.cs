@@ -29,10 +29,14 @@ namespace LlamaPure.Test
             Skip.IfNot(HasModel, "LLAMA_MODEL_PATH not set or file not found.");
 
             using var client = new LlamaPureClient(ModelPath);
-            float[] embedding = client.GetEmbedding("Hello");
+            float[] embedding = client.GetEmbedding("LLAMA_MODEL_PATH not set or file not found.");
 
             Assert.NotNull(embedding);
             Assert.True(embedding.Length > 0, "Embedding array must be non-empty.");
+
+            float[] embedding2 = client.GetEmbedding("Embedding array must be non-empty.");
+            Assert.NotNull(embedding2);
+            Assert.False(Array.Equals(embedding, embedding2), "Embeddings must be different.");
         }
 
         [SkippableFact]

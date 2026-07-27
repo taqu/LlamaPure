@@ -310,6 +310,12 @@ internal static class LlamaPureNative
     [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
     public static extern IntPtr llama_get_embeddings_ith(IntPtr ctx, int i);
 
+    [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr llama_get_embeddings_seq(IntPtr ctx, int seq_id);
+
+    [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern LlamaPoolingType llama_pooling_type(IntPtr ctx);
+
     // -------------------------------------------------------------------------
     // Memory / KV cache
     // -------------------------------------------------------------------------

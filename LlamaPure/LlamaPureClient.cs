@@ -59,16 +59,35 @@ namespace LlamaPure
             LlamaPureNative.LlamaBatch batch = LlamaPureNative.llama_batch_init(tokenIds.Length, 0, 1);
             try
             {
-                FillBatch(ref batch, tokenIds, posOffset: 0, setLastLogit: true);
+                // All tokens need logits=1 so pooling can accumulate every token's embedding.
+                FillBatch(ref batch, tokenIds, posOffset: 0, setLastLogit: true, setAllLogits: true);
 
                 int ret = LlamaPureNative.llama_decode(_ctx, batch);
                 if (ret != 0)
                     throw new InvalidOperationException($"llama_decode failed with code {ret}.");
 
-                int lastIdx = tokenIds.Length - 1;
-                IntPtr embdPtr = LlamaPureNative.llama_get_embeddings_ith(_ctx, lastIdx);
-                if (embdPtr == IntPtr.Zero)
-                    throw new InvalidOperationException("llama_get_embeddings_ith returned null.");
+                LlamaPureNative.LlamaPoolingType poolingType = LlamaPureNative.llama_pooling_type(_ctx);
+                IntPtr embdPtr;
+                if (poolingType != LlamaPureNative.LlamaPoolingType.None)
+                {
+                    // Embedding model with pooling: retrieve the pooled sequence embedding.
+                    embdPtr = LlamaPureNative.llama_get_embeddings_seq(_ctx, 0);
+                    if (embdPtr == IntPtr.Zero)
+                        throw new InvalidOperationException(
+                            $"llama_get_embeddings_seq returned null " +
+                            $"(pooling_type={poolingType}, n_embd={_nEmbd}). " +
+                            "Ensure the model supports sequence-level embeddings.");
+                }
+                else
+                {
+                    // Generative model or no-pooling mode: use the last token's embedding.
+                    embdPtr = LlamaPureNative.llama_get_embeddings_ith(_ctx, tokenIds.Length - 1);
+                    if (embdPtr == IntPtr.Zero)
+                        throw new InvalidOperationException(
+                            $"llama_get_embeddings_ith returned null " +
+                            $"(pooling_type=None, n_embd={_nEmbd}). " +
+                            "Ensure the context was created with embeddings=true.");
+                }
 
                 var result = new float[_nEmbd];
                 Marshal.Copy(embdPtr, result, 0, _nEmbd);
@@ -194,24 +213,19 @@ namespace LlamaPure
             return result;
         }
 
-        private void FillBatch(ref LlamaPureNative.LlamaBatch batch, int[] tokenIds, int posOffset, bool setLastLogit)
+        private void FillBatch(ref LlamaPureNative.LlamaBatch batch, int[] tokenIds, int posOffset, bool setLastLogit, bool setAllLogits = false)
         {
             int n = tokenIds.Length;
             batch.n_tokens = n;
 
             for (int i = 0; i < n; i++)
             {
-                // token[i]
                 Marshal.WriteInt32(batch.token + i * 4, tokenIds[i]);
-                // pos[i]
                 Marshal.WriteInt32(batch.pos + i * 4, posOffset + i);
-                // n_seq_id[i] = 1
                 Marshal.WriteInt32(batch.n_seq_id + i * 4, 1);
-                // seq_id[i][0] = 0
                 IntPtr seqIdRow = Marshal.ReadIntPtr(batch.seq_id + i * IntPtr.Size);
                 Marshal.WriteInt32(seqIdRow, 0);
-                // logits[i]
-                byte logitFlag = (setLastLogit && i == n - 1) ? (byte)1 : (byte)0;
+                byte logitFlag = (setAllLogits || (setLastLogit && i == n - 1)) ? (byte)1 : (byte)0;
                 Marshal.WriteByte(batch.logits + i, logitFlag);
             }
         }
