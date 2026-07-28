@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -12,11 +13,14 @@ namespace LlamaPure
         private int _nVocab;
         private int _nEmbd;
         private bool _disposed;
+        private readonly int _maxChunkSize;
 
         public LlamaPureClient(string modelPath, uint contextSize = 2048, int threads = 4)
         {
-            if (string.IsNullOrEmpty(modelPath))
+            if (string.IsNullOrEmpty(modelPath)) {
                 throw new ArgumentException("Model path must not be null or empty.", nameof(modelPath));
+            }
+            _maxChunkSize = (int)contextSize;
 
             LlamaPureNative.llama_backend_init();
 
@@ -44,49 +48,93 @@ namespace LlamaPure
                 throw new InvalidOperationException("Failed to create llama context.");
         }
 
-        public float[] GetEmbedding(string text)
+        public List<float[]> GetEmbedding(string text, int overlap = 128)
         {
             ThrowIfDisposed();
-            if (text == null) throw new ArgumentNullException(nameof(text));
+            if (text == null){
+                throw new ArgumentNullException(nameof(text));
+            }
+            IntPtr mem = LlamaPureNative.llama_get_memory(_ctx);
+            LlamaPureNative.llama_memory_clear(mem, 0);
+            int chunkSize = _maxChunkSize;
+            if (overlap >= chunkSize) {
+                throw new ArgumentException("Overlap size must be smaller than the allowed context chunk size.");
+            }
 
+            int[] tokenIds = Tokenize(text, addSpecial: true);
+            List<float[]> embeddingsList = new List<float[]>();
+            if (tokenIds.Length == 0) {
+                return embeddingsList;
+            }
+
+            //int[] chunkTokens = new int[_maxChunkSize];
+            int index = 0;
+            while (index < tokenIds.Length)
+            {
+                int currentChunkSize = Math.Min(chunkSize, tokenIds.Length - index);
+                int[] chunkTokens = new int[currentChunkSize];
+                Array.Copy(tokenIds, index, chunkTokens, 0, currentChunkSize);
+
+                float[] chunkVector = ProcessSingleTokenChunk(chunkTokens, currentChunkSize);
+                embeddingsList.Add(chunkVector);
+
+                index += chunkSize - overlap;
+
+                // Break if we hit the natural end of the text stream
+                if (index >= tokenIds.Length || currentChunkSize < chunkSize) {
+                    break;
+                }
+            }
+
+            return embeddingsList;
+        }
+
+        private float[] ProcessSingleTokenChunk(int[] tokenIds, int length)
+        {
+            // Reset state container inside llama context memory block
             IntPtr mem = LlamaPureNative.llama_get_memory(_ctx);
             LlamaPureNative.llama_memory_clear(mem, 0);
 
-            int[] tokenIds = Tokenize(text, addSpecial: true);
-            if (tokenIds.Length == 0)
-                throw new InvalidOperationException("Tokenization produced no tokens.");
-
-            LlamaPureNative.LlamaBatch batch = LlamaPureNative.llama_batch_init(tokenIds.Length, 0, 1);
+            // Sequence ID allocation is managed cleanly inside FillBatch (Mapped to Seq ID: 0)
+            LlamaPureNative.LlamaBatch batch = LlamaPureNative.llama_batch_init(length, 0, 1);
             try
             {
-                // All tokens need logits=1 so pooling can accumulate every token's embedding.
-                FillBatch(ref batch, tokenIds, posOffset: 0, setLastLogit: true, setAllLogits: true);
+                // Logits flag processing optimized: pass false for embedding models to avoid tracking redundant data
+                FillBatch(ref batch, tokenIds, length, posOffset: 0, setLogits: false);
 
-                int ret = LlamaPureNative.llama_decode(_ctx, batch);
-                if (ret != 0)
-                    throw new InvalidOperationException($"llama_decode failed with code {ret}.");
-
+                // Check if model has an encoder architecture or if pooling context is activated
+                bool hasEncoder = LlamaPureNative.llama_model_has_encoder(_model);
                 LlamaPureNative.LlamaPoolingType poolingType = LlamaPureNative.llama_pooling_type(_ctx);
-                IntPtr embdPtr;
-                if (poolingType != LlamaPureNative.LlamaPoolingType.None)
+                bool isPureEmbeddingModel = (poolingType != LlamaPureNative.LlamaPoolingType.None);
+
+                int ret;
+                if (hasEncoder && isPureEmbeddingModel)
                 {
-                    // Embedding model with pooling: retrieve the pooled sequence embedding.
-                    embdPtr = LlamaPureNative.llama_get_embeddings_seq(_ctx, 0);
-                    if (embdPtr == IntPtr.Zero)
-                        throw new InvalidOperationException(
-                            $"llama_get_embeddings_seq returned null " +
-                            $"(pooling_type={poolingType}, n_embd={_nEmbd}). " +
-                            "Ensure the model supports sequence-level embeddings.");
+                    ret = LlamaPureNative.llama_encode(_ctx, batch);
                 }
                 else
                 {
-                    // Generative model or no-pooling mode: use the last token's embedding.
+                    // Fallback route targeting standard causal autoregressive models
+                    ret = LlamaPureNative.llama_decode(_ctx, batch);
+                }
+
+                if (ret != 0)
+                    throw new InvalidOperationException($"Native execution failed during inference execution with error code: {ret}.");
+
+                IntPtr embdPtr;
+                if (poolingType != LlamaPureNative.LlamaPoolingType.None)
+                {
+                    // Get the pooled sequence embedding vector from Sequence ID: 0
+                    embdPtr = LlamaPureNative.llama_get_embeddings_seq(_ctx, 0);
+                    if (embdPtr == IntPtr.Zero)
+                        throw new InvalidOperationException("llama_get_embeddings_seq returned a null pointer.");
+                }
+                else
+                {
+                    // Fallback option utilizing last token calculation if pooling is unsupported
                     embdPtr = LlamaPureNative.llama_get_embeddings_ith(_ctx, tokenIds.Length - 1);
                     if (embdPtr == IntPtr.Zero)
-                        throw new InvalidOperationException(
-                            $"llama_get_embeddings_ith returned null " +
-                            $"(pooling_type=None, n_embd={_nEmbd}). " +
-                            "Ensure the context was created with embeddings=true.");
+                        throw new InvalidOperationException("llama_get_embeddings_ith returned a null pointer.");
                 }
 
                 var result = new float[_nEmbd];
@@ -95,6 +143,7 @@ namespace LlamaPure
             }
             finally
             {
+                // Guaranteed cleanup prevents out-of-memory errors over long continuous document chunks
                 LlamaPureNative.llama_batch_free(batch);
             }
         }
@@ -211,6 +260,25 @@ namespace LlamaPure
             var result = new int[count];
             Array.Copy(tokens, result, count);
             return result;
+        }
+
+        private void FillBatch(ref LlamaPureNative.LlamaBatch batch, int[] tokenIds, int length, int posOffset, bool setLogits)
+        {
+            int n = length;
+            batch.n_tokens = n;
+
+            for (int i = 0; i < n; i++)
+            {
+                Marshal.WriteInt32(batch.token + i * 4, tokenIds[i]);
+                Marshal.WriteInt32(batch.pos + i * 4, posOffset + i);
+                Marshal.WriteInt32(batch.n_seq_id + i * 4, 1);
+
+                IntPtr seqIdRow = Marshal.ReadIntPtr(batch.seq_id + i * IntPtr.Size);
+                Marshal.WriteInt32(seqIdRow, 0);
+
+                byte logitFlag = setLogits ? (byte)1 : (byte)0;
+                Marshal.WriteByte(batch.logits + i, logitFlag);
+            }
         }
 
         private void FillBatch(ref LlamaPureNative.LlamaBatch batch, int[] tokenIds, int posOffset, bool setLastLogit, bool setAllLogits = false)

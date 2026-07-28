@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using LlamaPure;
 using Xunit;
@@ -9,6 +10,8 @@ namespace LlamaPure.Test
     // Tests requiring a real model are skipped when the path is unset.
     public sealed class LlamaPureTests
     {
+        //private static readonly string EmbeddingModelPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "..\\..\\..\\", "model", "granite-embedding-311M-multilingual-r2-Q4_K_M.gguf");
+        private static readonly string EmbeddingModelPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "..\\..\\..\\", "model", "litellama-460m-1t.Q4_K_M.gguf");
         private static readonly string ModelPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "..\\..\\..\\", "model", "litellama-460m-1t.Q4_K_M.gguf");
 
         private static bool HasModel => !string.IsNullOrEmpty(ModelPath) && File.Exists(ModelPath);
@@ -28,15 +31,15 @@ namespace LlamaPure.Test
         {
             Skip.IfNot(HasModel, "LLAMA_MODEL_PATH not set or file not found.");
 
-            using var client = new LlamaPureClient(ModelPath);
-            float[] embedding = client.GetEmbedding("LLAMA_MODEL_PATH not set or file not found.");
+            using var client = new LlamaPureClient(EmbeddingModelPath);
+            List<float[]> embeddings = client.GetEmbedding("LLAMA_MODEL_PATH not set or file not found.");
 
-            Assert.NotNull(embedding);
-            Assert.True(embedding.Length > 0, "Embedding array must be non-empty.");
+            Assert.NotNull(embeddings);
+            Assert.True(embeddings.Count > 0, "Embedding array must be non-empty.");
 
-            float[] embedding2 = client.GetEmbedding("Embedding array must be non-empty.");
-            Assert.NotNull(embedding2);
-            Assert.False(Array.Equals(embedding, embedding2), "Embeddings must be different.");
+            List<float[]> embeddings2 = client.GetEmbedding("Embedding array must be non-empty.");
+            Assert.NotNull(embeddings2);
+            Assert.False(Array.Equals(embeddings[0], embeddings2[0]), "Embeddings must be different.");
         }
 
         [SkippableFact]

@@ -255,6 +255,12 @@ internal static class LlamaPureNative
     public static extern void llama_free(IntPtr ctx);
 
     [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern bool llama_model_has_encoder(IntPtr model);
+
+    [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern bool llama_model_has_decoder(IntPtr model);
+
+    [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
     public static extern IntPtr llama_model_get_vocab(IntPtr model);
 
     [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
@@ -297,6 +303,9 @@ internal static class LlamaPureNative
 
     [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
     public static extern void llama_batch_free(LlamaBatch batch);
+
+    [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int llama_encode(IntPtr ctx, LlamaBatch batch);
 
     [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
     public static extern int llama_decode(IntPtr ctx, LlamaBatch batch);
