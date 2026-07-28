@@ -40,6 +40,7 @@ namespace LlamaPure
             var ctxParams = LlamaPureNative.llama_context_default_params();
             ctxParams.n_ctx       = contextSize;
             ctxParams.n_batch     = contextSize;
+            ctxParams.n_ubatch    = contextSize;
             ctxParams.n_threads   = threads;
             ctxParams.embeddings  = 1;
 
@@ -108,7 +109,7 @@ namespace LlamaPure
                 bool isPureEmbeddingModel = (poolingType != LlamaPureNative.LlamaPoolingType.None);
 
                 int ret;
-                if (hasEncoder && isPureEmbeddingModel)
+                if (hasEncoder || isPureEmbeddingModel)
                 {
                     ret = LlamaPureNative.llama_encode(_ctx, batch);
                 }
