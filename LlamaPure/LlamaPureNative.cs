@@ -267,6 +267,9 @@ internal static class LlamaPureNative
     public static extern int llama_vocab_n_tokens(IntPtr vocab);
 
     [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int llama_model_n_ctx_train(IntPtr model);
+
+    [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
     public static extern int llama_model_n_embd(IntPtr model);
 
     [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
@@ -280,9 +283,9 @@ internal static class LlamaPureNative
 
     // bool params are C99 _Bool (1 byte); marshal as byte to avoid BOOL (4-byte) default
     [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, BestFitMapping = false)]
-    public static extern int llama_tokenize(
+    public static unsafe  extern int llama_tokenize(
         IntPtr vocab,
-        string text,
+        byte* text,
         int text_len,
         int[] tokens,
         int n_tokens_max,

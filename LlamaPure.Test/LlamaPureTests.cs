@@ -10,8 +10,8 @@ namespace LlamaPure.Test
     // Tests requiring a real model are skipped when the path is unset.
     public sealed class LlamaPureTests
     {
-        //private static readonly string EmbeddingModelPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "..\\..\\..\\", "model", "granite-embedding-311M-multilingual-r2-Q4_K_M.gguf");
-        private static readonly string EmbeddingModelPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "..\\..\\..\\", "model", "litellama-460m-1t.Q4_K_M.gguf");
+        private static readonly string EmbeddingModelPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "..\\..\\..\\", "model", "granite-embedding-97M-multilingual-r2.gguf");
+        //private static readonly string EmbeddingModelPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "..\\..\\..\\", "model", "litellama-460m-1t.Q4_K_M.gguf");
         private static readonly string ModelPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "..\\..\\..\\", "model", "litellama-460m-1t.Q4_K_M.gguf");
 
         private static bool HasModel => !string.IsNullOrEmpty(ModelPath) && File.Exists(ModelPath);
@@ -40,6 +40,28 @@ namespace LlamaPure.Test
             List<float[]> embeddings2 = client.GetEmbedding("Embedding array must be non-empty.");
             Assert.NotNull(embeddings2);
             Assert.False(Array.Equals(embeddings[0], embeddings2[0]), "Embeddings must be different.");
+        }
+
+        [SkippableFact]
+        public void GetEmbedding_Queries_ReturnsNonEmptyFloatArray()
+        {
+            Skip.IfNot(HasModel, "LLAMA_MODEL_PATH not set or file not found.");
+
+            using var client = new LlamaPureClient(EmbeddingModelPath);
+            List<float[]> embeddings1 = client.GetEmbedding("What is the tallest mountain in Japan?");
+
+            Assert.NotNull(embeddings1);
+            Assert.True(embeddings1.Count > 0, "Embedding array must be non-empty.");
+
+            List<float[]> embeddings2 = client.GetEmbedding("Wer hat das Lied Achy Breaky Heart geschrieben?");
+            Assert.NotNull(embeddings2);
+
+            List<float[]> embeddings3 = client.GetEmbedding("ドイツの首都はどこですか？");
+            Assert.NotNull(embeddings3);
+
+            Assert.False(Array.Equals(embeddings1[0], embeddings2[0]), "Embeddings must be different.");
+            Assert.False(Array.Equals(embeddings1[0], embeddings3[0]), "Embeddings must be different.");
+            Assert.False(Array.Equals(embeddings2[0], embeddings3[0]), "Embeddings must be different.");
         }
 
         [SkippableFact]
