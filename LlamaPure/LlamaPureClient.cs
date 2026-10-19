@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -15,12 +16,11 @@ namespace LlamaPure
         private bool _disposed;
         private readonly int _maxChunkSize;
 
-        public LlamaPureClient(string modelPath, uint contextSize = 2048, int threads = 4)
+        public LlamaPureClient(string modelPath, uint contextSize = uint.MaxValue, int threads = 4)
         {
             if (string.IsNullOrEmpty(modelPath)) {
                 throw new ArgumentException("Model path must not be null or empty.", nameof(modelPath));
             }
-            _maxChunkSize = (int)contextSize;
 
             LlamaPureNative.llama_backend_init();
 
@@ -34,19 +34,38 @@ namespace LlamaPure
             if (_vocab == IntPtr.Zero)
                 throw new InvalidOperationException("Failed to get vocabulary from model.");
 
+            if (uint.MaxValue == contextSize)
+            {
+                contextSize = (uint)LlamaPureNative.llama_model_n_ctx_train(_model);
+            }
+            _maxChunkSize = (int)contextSize;
             _nVocab = LlamaPureNative.llama_vocab_n_tokens(_vocab);
-            _nEmbd  = LlamaPureNative.llama_model_n_embd(_model);
+            _nEmbd = LlamaPureNative.llama_model_n_embd(_model);
 
             var ctxParams = LlamaPureNative.llama_context_default_params();
             ctxParams.n_ctx       = contextSize;
             ctxParams.n_batch     = contextSize;
             ctxParams.n_ubatch    = contextSize;
             ctxParams.n_threads   = threads;
+            //ctxParams.pooling_type = LlamaPureNative.LlamaPoolingType.Mean;
             ctxParams.embeddings  = 1;
 
             _ctx = LlamaPureNative.llama_init_from_model(_model, ctxParams);
             if (_ctx == IntPtr.Zero)
                 throw new InvalidOperationException("Failed to create llama context.");
+        }
+
+        static float[] NormalizeL2(float[] vector)
+        {
+            double sumOfSquares = vector.Sum(x => (double)x * x);
+            double magnitude = Math.Sqrt(sumOfSquares);
+
+            if (magnitude > 0)
+            {
+                double inverseMagnitude = 1.0 / magnitude;
+                return vector.Select(x => (float)(x * inverseMagnitude)).ToArray();
+            }
+            return vector;
         }
 
         public List<float[]> GetEmbedding(string text, int overlap = 128)
@@ -77,6 +96,7 @@ namespace LlamaPure
                 Array.Copy(tokenIds, index, chunkTokens, 0, currentChunkSize);
 
                 float[] chunkVector = ProcessSingleTokenChunk(chunkTokens, currentChunkSize);
+                chunkVector = NormalizeL2(chunkVector);
                 embeddingsList.Add(chunkVector);
 
                 index += chunkSize - overlap;
@@ -238,29 +258,33 @@ namespace LlamaPure
 
         private int[] Tokenize(string text, bool addSpecial)
         {
-            int nBytes = Encoding.UTF8.GetByteCount(text);
+            byte[] utf8Bytes = Encoding.UTF8.GetBytes(text + "\0");
+            int nBytes = utf8Bytes.Length-1;
             int maxTokens = nBytes + 16;
             var tokens = new int[maxTokens];
 
             byte specialFlag = addSpecial ? (byte)1 : (byte)0;
-            int count = LlamaPureNative.llama_tokenize(
-                _vocab, text, nBytes, tokens, maxTokens, specialFlag, 0);
-
-            if (count < 0)
+            unsafe
             {
-                // Buffer too small; reallocate with the exact required size.
-                maxTokens = -count;
-                tokens = new int[maxTokens];
-                count = LlamaPureNative.llama_tokenize(
-                    _vocab, text, nBytes, tokens, maxTokens, specialFlag, 0);
+                fixed (byte* ptr = utf8Bytes)
+                {
+                    int count = LlamaPureNative.llama_tokenize(_vocab, ptr, nBytes, tokens, maxTokens, specialFlag, 0);
+                    if (count < 0)
+                    {
+                        // Buffer too small; reallocate with the exact required size.
+                        maxTokens = -count;
+                        tokens = new int[maxTokens];
+                        count = LlamaPureNative.llama_tokenize(_vocab, ptr, nBytes, tokens, maxTokens, specialFlag, 0);
+                    }
+
+                    if (count < 0)
+                        throw new InvalidOperationException($"Tokenization failed (code {count}).");
+
+                    int[] result = new int[count];
+                    Array.Copy(tokens, result, count);
+                    return result;
+                }
             }
-
-            if (count < 0)
-                throw new InvalidOperationException($"Tokenization failed (code {count}).");
-
-            var result = new int[count];
-            Array.Copy(tokens, result, count);
-            return result;
         }
 
         private void FillBatch(ref LlamaPureNative.LlamaBatch batch, int[] tokenIds, int length, int posOffset, bool setLogits)
