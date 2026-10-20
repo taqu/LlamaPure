@@ -236,6 +236,13 @@ namespace LlamaPure
             return sb.ToString();
         }
 
+        public int CountTokens(string text)
+        {
+            if (text == null) throw new ArgumentNullException(nameof(text));
+            ThrowIfDisposed();
+            return Tokenize(text, addSpecial: true).Length;
+        }
+
         public void Dispose()
         {
             if (_disposed) return;
