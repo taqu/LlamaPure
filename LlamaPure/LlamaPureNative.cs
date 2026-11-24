@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-internal static class LlamaPureNative
+public static class LlamaPureNative
 {
     private const string LlamaDll = "llama";
 

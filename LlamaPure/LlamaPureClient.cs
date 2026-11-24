@@ -16,6 +16,11 @@ namespace LlamaPure
         private bool _disposed;
         private readonly int _maxChunkSize;
 
+        public static LlamaPureNative.LlamaModelParams GetDefaultParams()
+        {
+            return LlamaPureNative.llama_model_default_params();
+        }
+
         public LlamaPureClient(string modelPath, uint contextSize = uint.MaxValue, int threads = 4)
         {
             if (string.IsNullOrEmpty(modelPath)) {
