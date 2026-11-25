@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "LlamaPure": {
+      "commandName": "Project",
+      "debugEngines": "managed,native"
+    }
+  }
+}

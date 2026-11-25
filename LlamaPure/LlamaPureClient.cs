@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using static LlamaPureNative;
 
 namespace LlamaPure
 {
@@ -15,6 +16,11 @@ namespace LlamaPure
         private int _nEmbd;
         private bool _disposed;
         private readonly int _maxChunkSize;
+
+        public static LlamaPureNative.LlamaModelParams GetDefaultParams()
+        {
+            return LlamaPureNative.llama_model_default_params();
+        }
 
         public LlamaPureClient(string modelPath, uint contextSize = uint.MaxValue, int threads = 4)
         {
@@ -42,12 +48,12 @@ namespace LlamaPure
             _nVocab = LlamaPureNative.llama_vocab_n_tokens(_vocab);
             _nEmbd = LlamaPureNative.llama_model_n_embd(_model);
 
-            var ctxParams = LlamaPureNative.llama_context_default_params();
+            LlamaContextParams ctxParams = LlamaPureNative.llama_context_default_params();
             ctxParams.n_ctx       = contextSize;
             ctxParams.n_batch     = contextSize;
             ctxParams.n_ubatch    = contextSize;
             ctxParams.n_threads   = threads;
-            //ctxParams.pooling_type = LlamaPureNative.LlamaPoolingType.Mean;
+            ctxParams.pooling_type = LlamaPureNative.LlamaPoolingType.Mean;
             ctxParams.embeddings  = 1;
 
             _ctx = LlamaPureNative.llama_init_from_model(_model, ctxParams);
@@ -126,16 +132,17 @@ namespace LlamaPure
                 // Check if model has an encoder architecture or if pooling context is activated
                 bool hasEncoder = LlamaPureNative.llama_model_has_encoder(_model);
                 LlamaPureNative.LlamaPoolingType poolingType = LlamaPureNative.llama_pooling_type(_ctx);
-                bool isPureEmbeddingModel = (poolingType != LlamaPureNative.LlamaPoolingType.None);
 
                 int ret;
-                if (hasEncoder || isPureEmbeddingModel)
+                if (hasEncoder)
                 {
+                    // llama_encode is only valid for true encoder-decoder architectures (e.g. T5).
+                    // BERT-style embedding models have pooling but no encoder graph — calling
+                    // llama_encode on them invokes an uninitialized encoder scheduler (n_backends=0).
                     ret = LlamaPureNative.llama_encode(_ctx, batch);
                 }
                 else
                 {
-                    // Fallback route targeting standard causal autoregressive models
                     ret = LlamaPureNative.llama_decode(_ctx, batch);
                 }
 

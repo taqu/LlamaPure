@@ -10,9 +10,8 @@ namespace LlamaPure.Test
     // Tests requiring a real model are skipped when the path is unset.
     public sealed class LlamaPureTests
     {
-        private static readonly string EmbeddingModelPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "..\\..\\..\\", "model", "granite-embedding-97M-multilingual-r2.gguf");
-        //private static readonly string EmbeddingModelPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "..\\..\\..\\", "model", "litellama-460m-1t.Q4_K_M.gguf");
-        private static readonly string ModelPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "..\\..\\..\\", "model", "litellama-460m-1t.Q4_K_M.gguf");
+        private static readonly string EmbeddingModelPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "..","..","..", "model", "granite-embedding-97M-multilingual-r2.gguf");
+        private static readonly string ModelPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "..","..","..", "model", "litellama-460m-1t.Q4_K_M.gguf");
 
         private static bool HasModel => !string.IsNullOrEmpty(ModelPath) && File.Exists(ModelPath);
 
@@ -31,7 +30,7 @@ namespace LlamaPure.Test
         {
             Skip.IfNot(HasModel, "LLAMA_MODEL_PATH not set or file not found.");
 
-            using var client = new LlamaPureClient(EmbeddingModelPath);
+            using var client = new LlamaPureClient(EmbeddingModelPath, 4096);
             List<float[]> embeddings = client.GetEmbedding("LLAMA_MODEL_PATH not set or file not found.");
 
             Assert.NotNull(embeddings);

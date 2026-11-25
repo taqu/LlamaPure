@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-internal static class LlamaPureNative
+public static class LlamaPureNative
 {
     private const string LlamaDll = "llama";
 
@@ -15,10 +15,19 @@ internal static class LlamaPureNative
 
     public enum LlamaLoadMode : int
     {
-        None     = 0,
-        Mmap     = 1,
-        Mlock    = 2,
-        DirectIo = 3,
+        Auto      = -1,
+        None      =  0,
+        Mmap      =  1,
+        Mlock     =  2,
+        MmapMlock =  3,
+        DirectIo  =  4,
+    }
+
+    public enum LlamaLazyMode : int
+    {
+        Off  = 0,
+        Auto = 1,
+        On   = 2,
     }
 
     public enum LlamaContextType : int
@@ -62,40 +71,43 @@ internal static class LlamaPureNative
 
     public enum GgmlType : int
     {
-        F32  = 0,
-        F16  = 1,
-        Q4_0 = 2,
-        Q4_1 = 3,
-        Q5_0 = 6,
-        Q5_1 = 7,
-        Q8_0 = 8,
-        Q8_1 = 9,
-        Q2K  = 10,
-        Q3KS = 11,
-        Q3KM = 12,
-        Q3KL = 13,
-        Q4KS = 14,
-        Q4KM = 15,
-        Q5KS = 16,
-        Q5KM = 17,
-        Q6K  = 18,
-        Q8K  = 19,
-        Iq2Xxs = 20,
-        Iq2Xs  = 21,
-        Iq3Xxs = 22,
-        Iq1S   = 23,
-        Iq4Nl  = 24,
-        Iq3S   = 25,
-        Iq2S   = 26,
-        Iq4Xs  = 27,
-        I8     = 28,
-        I16    = 29,
-        I32    = 30,
-        I64    = 31,
-        F64    = 32,
-        Iq1M   = 33,
-        Bf16   = 34,
-        Count  = 39,
+        F32     = 0,
+        F16     = 1,
+        Q4_0    = 2,
+        Q4_1    = 3,
+        Q5_0    = 6,
+        Q5_1    = 7,
+        Q8_0    = 8,
+        Q8_1    = 9,
+        Q2_K    = 10,
+        Q3_K    = 11,
+        Q4_K    = 12,
+        Q5_K    = 13,
+        Q6_K    = 14,
+        Q8_K    = 15,
+        IQ2_XXS = 16,
+        IQ2_XS  = 17,
+        IQ3_XXS = 18,
+        IQ1_S   = 19,
+        IQ4_NL  = 20,
+        IQ3_S   = 21,
+        IQ2_S   = 22,
+        IQ4_XS  = 23,
+        I8      = 24,
+        I16     = 25,
+        I32     = 26,
+        I64     = 27,
+        F64     = 28,
+        IQ1_M   = 29,
+        BF16    = 30,
+        TQ1_0   = 34,
+        TQ2_0   = 35,
+        MXFP4   = 39,
+        NVFP4   = 40,
+        Q1_0    = 41,
+        Q2_0    = 42,
+        F8_E4M3 = 43,
+        Count   = 44,
     }
 
     // llama_model_params matches the C struct layout on x64:
@@ -104,18 +116,21 @@ internal static class LlamaPureNative
     //   offset 16: n_gpu_layers (int32 4)
     //   offset 20: split_mode (enum/int32 4)
     //   offset 24: load_mode (enum/int32 4)
-    //   offset 28: main_gpu (int32 4)
-    //   offset 32: tensor_split (ptr 8)
-    //   offset 40: progress_callback (ptr 8)
-    //   offset 48: progress_callback_user_data (ptr 8)
-    //   offset 56: kv_overrides (ptr 8)
-    //   offset 64: vocab_only (byte 1)
-    //   offset 65: check_tensors (byte 1)
-    //   offset 66: use_extra_bufts (byte 1)
-    //   offset 67: no_host (byte 1)
-    //   offset 68: no_alloc (byte 1)
-    //   offset 69-71: padding (3 bytes)
-    //   total: 72 bytes
+    //   offset 28: lazy_mode (enum/int32 4)
+    //   offset 32: main_gpu (int32 4)
+    //   offset 36: _pad (4 bytes, aligns tensor_split to 8)
+    //   offset 40: tensor_split (ptr 8)
+    //   offset 48: progress_callback (ptr 8)
+    //   offset 56: progress_callback_user_data (ptr 8)
+    //   offset 64: kv_overrides (ptr 8)
+    //   offset 72: vocab_only (byte 1)
+    //   offset 73: check_tensors (byte 1)
+    //   offset 74: use_extra_bufts (byte 1)
+    //   offset 75: no_host (byte 1)
+    //   offset 76: no_alloc (byte 1)
+    //   offset 77: load_mtp (byte 1)
+    //   offset 78-79: padding (2 bytes)
+    //   total: 80 bytes
     [StructLayout(LayoutKind.Sequential)]
     public struct LlamaModelParams
     {
@@ -124,6 +139,7 @@ internal static class LlamaPureNative
         public int n_gpu_layers;
         public LlamaSplitMode split_mode;
         public LlamaLoadMode load_mode;
+        public LlamaLazyMode lazy_mode;
         public int main_gpu;
         public IntPtr tensor_split;
         public IntPtr progress_callback;
@@ -134,6 +150,7 @@ internal static class LlamaPureNative
         public byte use_extra_bufts;
         public byte no_host;
         public byte no_alloc;
+        public byte load_mtp;
     }
 
     // llama_context_params matches the C struct layout on x64:
@@ -143,40 +160,43 @@ internal static class LlamaPureNative
     //   offset 12:  n_seq_max (uint32 4)
     //   offset 16:  n_rs_seq (uint32 4)
     //   offset 20:  n_outputs_max (uint32 4)
-    //   offset 24:  n_threads (int32 4)
-    //   offset 28:  n_threads_batch (int32 4)
-    //   offset 32:  ctx_type (enum/int32 4)
-    //   offset 36:  rope_scaling_type (enum/int32 4)
-    //   offset 40:  pooling_type (enum/int32 4)
-    //   offset 44:  attention_type (enum/int32 4)
-    //   offset 48:  flash_attn_type (enum/int32 4)
-    //   offset 52:  rope_freq_base (float 4)
-    //   offset 56:  rope_freq_scale (float 4)
-    //   offset 60:  yarn_ext_factor (float 4)
-    //   offset 64:  yarn_attn_factor (float 4)
-    //   offset 68:  yarn_beta_fast (float 4)
-    //   offset 72:  yarn_beta_slow (float 4)
-    //   offset 76:  yarn_orig_ctx (uint32 4)
-    //   offset 80:  defrag_thold (float 4)
+    //   offset 24:  n_outputs_max_per_seq (uint32 4)
+    //   offset 28:  n_threads (int32 4)
+    //   offset 32:  n_threads_batch (int32 4)
+    //   offset 36:  ctx_type (enum/int32 4)
+    //   offset 40:  rope_scaling_type (enum/int32 4)
+    //   offset 44:  pooling_type (enum/int32 4)
+    //   offset 48:  attention_type (enum/int32 4)
+    //   offset 52:  flash_attn_type (enum/int32 4)
+    //   offset 56:  rope_freq_base (float 4)
+    //   offset 60:  rope_freq_scale (float 4)
+    //   offset 64:  yarn_ext_factor (float 4)
+    //   offset 68:  yarn_attn_factor (float 4)
+    //   offset 72:  yarn_beta_fast (float 4)
+    //   offset 76:  yarn_beta_slow (float 4)
+    //   offset 80:  yarn_orig_ctx (uint32 4)
     //   offset 84:  _pad (4 bytes, aligns cb_eval to 8)
     //   offset 88:  cb_eval (ptr 8)
     //   offset 96:  cb_eval_user_data (ptr 8)
     //   offset 104: type_k (enum/int32 4)
     //   offset 108: type_v (enum/int32 4)
-    //   offset 112: abort_callback (ptr 8)
-    //   offset 120: abort_callback_data (ptr 8)
-    //   offset 128: embeddings (byte 1)
-    //   offset 129: offload_kqv (byte 1)
-    //   offset 130: no_perf (byte 1)
-    //   offset 131: op_offload (byte 1)
-    //   offset 132: swa_full (byte 1)
-    //   offset 133: kv_unified (byte 1)
-    //   offset 134: _pad2 (2 bytes, aligns samplers to 8)
-    //   offset 136: samplers (ptr 8)
-    //   offset 144: n_samplers (size_t 8)
-    //   offset 152: ctx_other (ptr 8)
-    //   total: 160 bytes
-    [StructLayout(LayoutKind.Explicit, Size = 160)]
+    //   offset 112: moe_cache_size (size_t 8)
+    //   offset 120: moe_cache_cpu_share (float 4)
+    //   offset 124: _pad (4 bytes, aligns abort_callback to 8)
+    //   offset 128: abort_callback (ptr 8)
+    //   offset 136: abort_callback_data (ptr 8)
+    //   offset 144: embeddings (byte 1)
+    //   offset 145: offload_kqv (byte 1)
+    //   offset 146: no_perf (byte 1)
+    //   offset 147: op_offload (byte 1)
+    //   offset 148: swa_full (byte 1)
+    //   offset 149: kv_unified (byte 1)
+    //   offset 150: _pad2 (2 bytes, aligns samplers to 8)
+    //   offset 152: samplers (ptr 8)
+    //   offset 160: n_samplers (size_t 8)
+    //   offset 168: ctx_other (ptr 8)
+    //   total: 176 bytes
+    [StructLayout(LayoutKind.Explicit, Size = 176)]
     public struct LlamaContextParams
     {
         [FieldOffset(0)]   public uint n_ctx;
@@ -185,36 +205,38 @@ internal static class LlamaPureNative
         [FieldOffset(12)]  public uint n_seq_max;
         [FieldOffset(16)]  public uint n_rs_seq;
         [FieldOffset(20)]  public uint n_outputs_max;
-        [FieldOffset(24)]  public int n_threads;
-        [FieldOffset(28)]  public int n_threads_batch;
-        [FieldOffset(32)]  public LlamaContextType ctx_type;
-        [FieldOffset(36)]  public LlamaRopeScalingType rope_scaling_type;
-        [FieldOffset(40)]  public LlamaPoolingType pooling_type;
-        [FieldOffset(44)]  public LlamaAttentionType attention_type;
-        [FieldOffset(48)]  public LlamaFlashAttnType flash_attn_type;
-        [FieldOffset(52)]  public float rope_freq_base;
-        [FieldOffset(56)]  public float rope_freq_scale;
-        [FieldOffset(60)]  public float yarn_ext_factor;
-        [FieldOffset(64)]  public float yarn_attn_factor;
-        [FieldOffset(68)]  public float yarn_beta_fast;
-        [FieldOffset(72)]  public float yarn_beta_slow;
-        [FieldOffset(76)]  public uint yarn_orig_ctx;
-        [FieldOffset(80)]  public float defrag_thold;
+        [FieldOffset(24)]  public uint n_outputs_max_per_seq;
+        [FieldOffset(28)]  public int n_threads;
+        [FieldOffset(32)]  public int n_threads_batch;
+        [FieldOffset(36)]  public LlamaContextType ctx_type;
+        [FieldOffset(40)]  public LlamaRopeScalingType rope_scaling_type;
+        [FieldOffset(44)]  public LlamaPoolingType pooling_type;
+        [FieldOffset(48)]  public LlamaAttentionType attention_type;
+        [FieldOffset(52)]  public LlamaFlashAttnType flash_attn_type;
+        [FieldOffset(56)]  public float rope_freq_base;
+        [FieldOffset(60)]  public float rope_freq_scale;
+        [FieldOffset(64)]  public float yarn_ext_factor;
+        [FieldOffset(68)]  public float yarn_attn_factor;
+        [FieldOffset(72)]  public float yarn_beta_fast;
+        [FieldOffset(76)]  public float yarn_beta_slow;
+        [FieldOffset(80)]  public uint yarn_orig_ctx;
         [FieldOffset(88)]  public IntPtr cb_eval;
         [FieldOffset(96)]  public IntPtr cb_eval_user_data;
         [FieldOffset(104)] public GgmlType type_k;
         [FieldOffset(108)] public GgmlType type_v;
-        [FieldOffset(112)] public IntPtr abort_callback;
-        [FieldOffset(120)] public IntPtr abort_callback_data;
-        [FieldOffset(128)] public byte embeddings;
-        [FieldOffset(129)] public byte offload_kqv;
-        [FieldOffset(130)] public byte no_perf;
-        [FieldOffset(131)] public byte op_offload;
-        [FieldOffset(132)] public byte swa_full;
-        [FieldOffset(133)] public byte kv_unified;
-        [FieldOffset(136)] public IntPtr samplers;
-        [FieldOffset(144)] public UIntPtr n_samplers;
-        [FieldOffset(152)] public IntPtr ctx_other;
+        [FieldOffset(112)] public UIntPtr moe_cache_size;
+        [FieldOffset(120)] public float moe_cache_cpu_share;
+        [FieldOffset(128)] public IntPtr abort_callback;
+        [FieldOffset(136)] public IntPtr abort_callback_data;
+        [FieldOffset(144)] public byte embeddings;
+        [FieldOffset(145)] public byte offload_kqv;
+        [FieldOffset(146)] public byte no_perf;
+        [FieldOffset(147)] public byte op_offload;
+        [FieldOffset(148)] public byte swa_full;
+        [FieldOffset(149)] public byte kv_unified;
+        [FieldOffset(152)] public IntPtr samplers;
+        [FieldOffset(160)] public UIntPtr n_samplers;
+        [FieldOffset(168)] public IntPtr ctx_other;
     }
 
     // llama_batch: n_tokens + 6 pointers = 4 + 6*8 = 52 bytes + 4 pad = 56 bytes
@@ -255,9 +277,11 @@ internal static class LlamaPureNative
     public static extern void llama_free(IntPtr ctx);
 
     [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool llama_model_has_encoder(IntPtr model);
 
     [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool llama_model_has_decoder(IntPtr model);
 
     [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
@@ -278,6 +302,7 @@ internal static class LlamaPureNative
     [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
     public static extern int llama_vocab_eos(IntPtr vocab);
 
+    // bool params are C99 _Bool (1 byte); marshal as byte to avoid BOOL (4-byte) default
     [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
     public static extern byte llama_vocab_is_eog(IntPtr vocab, int token);
 
