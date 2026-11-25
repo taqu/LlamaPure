@@ -30,7 +30,7 @@ namespace LlamaPure.Test
         {
             Skip.IfNot(HasModel, "LLAMA_MODEL_PATH not set or file not found.");
 
-            using var client = new LlamaPureClient(EmbeddingModelPath, 4096);
+            using var client = new LlamaPureClient(EmbeddingModelPath, 4096, enableEmbeddings: true);
             List<float[]> embeddings = client.GetEmbedding("LLAMA_MODEL_PATH not set or file not found.");
 
             Assert.NotNull(embeddings);
@@ -46,7 +46,7 @@ namespace LlamaPure.Test
         {
             Skip.IfNot(HasModel, "LLAMA_MODEL_PATH not set or file not found.");
 
-            using var client = new LlamaPureClient(EmbeddingModelPath);
+            using var client = new LlamaPureClient(EmbeddingModelPath, enableEmbeddings: true);
             List<float[]> embeddings1 = client.GetEmbedding("What is the tallest mountain in Japan?");
 
             Assert.NotNull(embeddings1);
