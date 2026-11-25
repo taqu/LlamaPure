@@ -132,16 +132,17 @@ namespace LlamaPure
                 // Check if model has an encoder architecture or if pooling context is activated
                 bool hasEncoder = LlamaPureNative.llama_model_has_encoder(_model);
                 LlamaPureNative.LlamaPoolingType poolingType = LlamaPureNative.llama_pooling_type(_ctx);
-                bool isPureEmbeddingModel = (poolingType != LlamaPureNative.LlamaPoolingType.None);
 
                 int ret;
-                if (hasEncoder || isPureEmbeddingModel)
+                if (hasEncoder)
                 {
+                    // llama_encode is only valid for true encoder-decoder architectures (e.g. T5).
+                    // BERT-style embedding models have pooling but no encoder graph — calling
+                    // llama_encode on them invokes an uninitialized encoder scheduler (n_backends=0).
                     ret = LlamaPureNative.llama_encode(_ctx, batch);
                 }
                 else
                 {
-                    // Fallback route targeting standard causal autoregressive models
                     ret = LlamaPureNative.llama_decode(_ctx, batch);
                 }
 
