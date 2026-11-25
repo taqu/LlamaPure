@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using static LlamaPureNative;
 
 namespace LlamaPure
 {
@@ -47,12 +48,12 @@ namespace LlamaPure
             _nVocab = LlamaPureNative.llama_vocab_n_tokens(_vocab);
             _nEmbd = LlamaPureNative.llama_model_n_embd(_model);
 
-            var ctxParams = LlamaPureNative.llama_context_default_params();
+            LlamaContextParams ctxParams = LlamaPureNative.llama_context_default_params();
             ctxParams.n_ctx       = contextSize;
             ctxParams.n_batch     = contextSize;
             ctxParams.n_ubatch    = contextSize;
             ctxParams.n_threads   = threads;
-            //ctxParams.pooling_type = LlamaPureNative.LlamaPoolingType.Mean;
+            ctxParams.pooling_type = LlamaPureNative.LlamaPoolingType.Mean;
             ctxParams.embeddings  = 1;
 
             _ctx = LlamaPureNative.llama_init_from_model(_model, ctxParams);
