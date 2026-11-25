@@ -22,7 +22,7 @@ namespace LlamaPure
             return LlamaPureNative.llama_model_default_params();
         }
 
-        public LlamaPureClient(string modelPath, uint contextSize = uint.MaxValue, int threads = 4)
+        public LlamaPureClient(string modelPath, uint contextSize = uint.MaxValue, int threads = 4, bool enableEmbeddings = false)
         {
             if (string.IsNullOrEmpty(modelPath)) {
                 throw new ArgumentException("Model path must not be null or empty.", nameof(modelPath));
@@ -53,8 +53,11 @@ namespace LlamaPure
             ctxParams.n_batch     = contextSize;
             ctxParams.n_ubatch    = contextSize;
             ctxParams.n_threads   = threads;
-            ctxParams.pooling_type = LlamaPureNative.LlamaPoolingType.Mean;
-            ctxParams.embeddings  = 1;
+            if (enableEmbeddings)
+            {
+                ctxParams.pooling_type = LlamaPureNative.LlamaPoolingType.Mean;
+                ctxParams.embeddings   = 1;
+            }
 
             _ctx = LlamaPureNative.llama_init_from_model(_model, ctxParams);
             if (_ctx == IntPtr.Zero)
