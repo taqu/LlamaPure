@@ -13,6 +13,10 @@ jobs:
   build-test-publish:
     runs-on: ubuntu-latest
 
+    permissions:
+      id-token: write  # Required to request the GitHub OIDC token for NuGet Trusted Publishing
+      contents: read
+
     steps:
       # -----------------------------------------------------------------------
       # Step 1: Check out the full repository history so that git tags are
@@ -86,27 +90,29 @@ jobs:
           fi
 
       # -----------------------------------------------------------------------
-      # Step 7: Upload the packed .nupkg to NuGet.org.
+      # Step 7: Upload the packed .nupkg to NuGet.org using Trusted Publishing.
       #
-      # Condition: runs ONLY when both of the following are true:
-      #   a) The workflow was triggered by a tag push (github.ref_type == 'tag')
-      #   b) The NUGET_API_KEY secret is configured in the repository settings
+      # Condition: runs ONLY when triggered by a tag push (github.ref_type == 'tag').
+      # Manual workflow_dispatch runs skip this step safely.
       #
-      # This dual guard ensures that:
-      #   - Manual workflow_dispatch runs and local `act` runs skip this step
-      #     safely, even if the secret is absent.
-      #   - A tag push without a configured secret fails loudly on this step
-      #     rather than silently succeeding with an anonymous push.
+      # Trusted Publishing uses a short-lived GitHub OIDC token (audience:
+      # nuget.org) in place of a stored API key secret. NuGet.org validates the
+      # token against the registered trusted publisher configuration for this
+      # repository. No NUGET_API_KEY secret is required.
+      #
+      # Pre-requisite: configure a trusted publisher on NuGet.org for this
+      # package pointing to this repository and workflow file.
       #
       # --skip-duplicate prevents the job from failing if the same version was
       # already published (e.g. after a re-run of a partially failed workflow).
       # -----------------------------------------------------------------------
       - name: Publish to NuGet.org
-        if: github.ref_type == 'tag' && env.API_KEY != ''
-        env:
-          API_KEY: ${{ secrets.NUGET_API_KEY }}
+        if: github.ref_type == 'tag'
         run: |
+          NUGET_TOKEN=$(curl -sS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=nuget.org" | jq -r '.value')
           dotnet nuget push "./artifacts/*.nupkg" \
-            --api-key "$API_KEY" \
+            --api-key "$NUGET_TOKEN" \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
