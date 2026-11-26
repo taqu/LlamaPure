@@ -17,9 +17,8 @@
     <PackageReference Include="Xunit.SkippableFact" Version="1.4.13" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
   </ItemGroup>
-
   <ItemGroup>
-    <ProjectReference Include="..\LlamaPure\LlamaPure.csproj" />
+    <PackageReference Include="LlamaPure" Version="1.0.7" />
   </ItemGroup>
   <Target Name="CopyNativeLibsForTests" AfterTargets="Build">
     <ItemGroup>

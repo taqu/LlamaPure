@@ -8,6 +8,7 @@
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <PackageOutputPath>$(SolutionDir)LocalPackages</PackageOutputPath>
     <PlatformTarget>x64</PlatformTarget>
     <Authors>taqu</Authors>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>

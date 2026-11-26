@@ -59,3 +59,4 @@ nunit-*.xml
 /.vs
 obj/
 bin/
+/LocalPackages
